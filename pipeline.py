@@ -334,6 +334,36 @@ SCHEMA:
 """.strip()
 
 
+
+# ── Task Tracker ──────────────────────────────────────────────────────────────
+
+def log_task(account_id: str, pipeline: str, status: str, notes: str = ""):
+    """Log a task entry to _tasks.json (free alternative to Asana)."""
+    tasks_file = OUTPUTS_DIR.parent / "_tasks.json"
+    tasks = []
+    try:
+        if tasks_file.exists():
+            tasks = json.loads(tasks_file.read_text(encoding="utf-8"))
+    except Exception:
+        tasks = []
+
+    # Check if task already exists (idempotent)
+    existing = next((t for t in tasks if t["account_id"] == account_id and t["pipeline"] == pipeline), None)
+    entry = {
+        "account_id":  account_id,
+        "pipeline":    pipeline,
+        "status":      status,
+        "updated_at":  datetime.datetime.now().isoformat(),
+        "notes":       notes
+    }
+    if existing:
+        tasks[tasks.index(existing)] = entry
+    else:
+        tasks.append(entry)
+
+    tasks_file.write_text(json.dumps(tasks, indent=2), encoding="utf-8")
+    log.info(f"[TASK LOGGED] {account_id} | {pipeline} | {status}")
+
 # ── Pipeline A ────────────────────────────────────────────────────────────────
 
 def truncate_transcript(text: str, max_chars: int = 6000) -> str:
@@ -383,6 +413,7 @@ def pipeline_a(transcript: str, company_hint: str = None) -> dict:
     out = OUTPUTS_DIR / account_id / "v1"
     save_json(out / "account_memo.json", memo)
     save_json(out / "agent_spec.json",   spec)
+    log_task(account_id, "Pipeline_A", "v1_complete", f"Unknowns: {len(memo.get('questions_or_unknowns', []))}")
     log.info(f"=== PIPELINE A COMPLETE: {account_id} ===")
     return {"account_id": account_id, "memo": memo, "spec": spec}
 
@@ -486,6 +517,7 @@ def pipeline_b(onboarding_text: str, account_id: str) -> dict:
     save_json(OUTPUTS_DIR / account_id / "changelog.json",      changelog)
     (OUTPUTS_DIR / account_id / "changelog.md").write_text(md, encoding="utf-8")
     log.info(f"Saved changelog: {len(changes)} changes, {len(resolved)} resolved")
+    log_task(account_id, "Pipeline_B", "v2_complete", f"Changes: {len(changes)}, Resolved: {len(resolved)}")
     log.info(f"=== PIPELINE B COMPLETE: {account_id} ===")
 
     return {
