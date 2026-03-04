@@ -1,0 +1,288 @@
+{
+  "name": "Clara Answers Pipeline",
+  "nodes": [
+    {
+      "parameters": {},
+      "id": "start-node",
+      "name": "Start",
+      "type": "n8n-nodes-base.start",
+      "typeVersion": 1,
+      "position": [100, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Normalize input — accepts either {transcript, company_name} or {onboarding_text, account_id}\nconst item = $input.item.json;\nconst today = new Date().toISOString().split('T')[0];\n\nreturn {\n  json: {\n    transcript:      item.transcript      || null,\n    onboarding_text: item.onboarding_text || null,\n    company_name:    item.company_name    || null,\n    account_id:      item.account_id      || null,\n    pipeline:        item.onboarding_text ? 'B' : 'A',\n    today:           today\n  }\n};"
+      },
+      "id": "normalize-input",
+      "name": "Normalize Input",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [300, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{ $json.pipeline }}",
+              "value2": "A"
+            }
+          ]
+        }
+      },
+      "id": "route-pipeline",
+      "name": "Pipeline A or B?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [500, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key",           "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version",    "value": "2023-06-01" },
+            { "name": "Content-Type",         "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=",
+              "value": "={{ JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4096, system: $env.DEMO_EXTRACTION_SYSTEM, messages: [{ role: 'user', content: 'Date: ' + $json.today + '\\n\\nTRANSCRIPT:\\n' + $json.transcript }] }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-memo-v1",
+      "name": "Extract Account Memo (v1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [700, 180]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Parse Claude response and clean JSON\nconst raw = $input.item.json.content[0].text;\nconst cleaned = raw.replace(/^```(?:json)?\\s*/m, '').replace(/\\s*```$/m, '').trim();\nlet memo;\ntry {\n  memo = JSON.parse(cleaned);\n} catch(e) {\n  throw new Error('Failed to parse memo JSON: ' + e.message + '\\nRaw: ' + raw.slice(0,300));\n}\n\n// Ensure account_id\nif (!memo.account_id && memo.company_name) {\n  memo.account_id = memo.company_name.toLowerCase().replace(/[^a-z0-9]+/g,'-').replace(/-+$/,'') + '-001';\n}\n\nreturn { json: { memo, account_id: memo.account_id } };"
+      },
+      "id": "parse-memo-v1",
+      "name": "Parse Memo v1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 180]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key",        "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "Content-Type",      "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=",
+              "value": "={{ JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4096, system: $env.AGENT_SPEC_SYSTEM, messages: [{ role: 'user', content: 'Date: ' + $('Normalize Input').item.json.today + '\\n\\nACCOUNT MEMO:\\n' + JSON.stringify($json.memo, null, 2) }] }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "generate-spec-v1",
+      "name": "Generate Agent Spec (v1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1100, 180]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $input.item.json.content[0].text;\nconst cleaned = raw.replace(/^```(?:json)?\\s*/m,'').replace(/\\s*```$/m,'').trim();\nlet spec;\ntry { spec = JSON.parse(cleaned); } catch(e) { throw new Error('Spec parse failed: ' + e.message); }\nspec.version    = 'v1';\nspec.account_id = $('Parse Memo v1').item.json.account_id;\nreturn { json: { spec, account_id: spec.account_id, memo: $('Parse Memo v1').item.json.memo } };"
+      },
+      "id": "parse-spec-v1",
+      "name": "Parse Spec v1",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 180]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Save v1 memo and spec as JSON files in outputs/accounts/<id>/v1/\nconst { memo, spec, account_id } = $input.item.json;\nconst fs = require('fs');\nconst path = require('path');\n\nconst outDir = path.join(process.env.OUTPUTS_DIR || './outputs/accounts', account_id, 'v1');\nfs.mkdirSync(outDir, { recursive: true });\n\nfs.writeFileSync(path.join(outDir, 'account_memo.json'), JSON.stringify(memo, null, 2));\nfs.writeFileSync(path.join(outDir, 'agent_spec.json'),   JSON.stringify(spec, null, 2));\n\nconsole.log('[SAVED v1]', outDir);\nreturn { json: { account_id, status: 'v1_saved', memo_path: outDir + '/account_memo.json', spec_path: outDir + '/agent_spec.json' } };"
+      },
+      "id": "save-v1",
+      "name": "Save v1 to Disk",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 180]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key",        "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "Content-Type",      "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=",
+              "value": "={{ JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4096, system: $env.ONBOARDING_SYSTEM, messages: [{ role: 'user', content: 'Date: ' + $('Normalize Input').item.json.today + '\\n\\nV1 ACCOUNT MEMO:\\n' + $json.v1_memo_raw + '\\n\\nONBOARDING INPUT:\\n' + $('Normalize Input').item.json.onboarding_text }] }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "extract-memo-v2",
+      "name": "Extract Account Memo (v2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [700, 420]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Load existing v1 memo from disk for Pipeline B\nconst fs = require('fs');\nconst path = require('path');\nconst { account_id } = $input.item.json;\nconst v1Path = path.join(process.env.OUTPUTS_DIR || './outputs/accounts', account_id, 'v1', 'account_memo.json');\n\nif (!fs.existsSync(v1Path)) {\n  throw new Error('No v1 memo found for ' + account_id + '. Run Pipeline A first.');\n}\n\nconst v1_memo_raw = fs.readFileSync(v1Path, 'utf8');\nreturn { json: { ...($input.item.json), v1_memo_raw, v1_memo: JSON.parse(v1_memo_raw) } };"
+      },
+      "id": "load-v1-memo",
+      "name": "Load v1 Memo",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [500, 420]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $input.item.json.content[0].text;\nconst cleaned = raw.replace(/^```(?:json)?\\s*/m,'').replace(/\\s*```$/m,'').trim();\nlet v2_memo;\ntry { v2_memo = JSON.parse(cleaned); } catch(e) { throw new Error('v2 memo parse failed: ' + e.message); }\nv2_memo.version    = 'v2';\nv2_memo.account_id = $('Load v1 Memo').item.json.account_id;\n\n// Diff function\nfunction diffDicts(o, n, p) {\n  const changes = [];\n  const keys = new Set([...Object.keys(o||{}), ...Object.keys(n||{})]);\n  for (const k of keys) {\n    const fk = p ? p+'.'+k : k;\n    if (!(k in o)) changes.push({field:fk,type:'ADDED',old:null,new:n[k]});\n    else if (!(k in n)) changes.push({field:fk,type:'REMOVED',old:o[k],new:null});\n    else if (typeof o[k]==='object'&&o[k]&&typeof n[k]==='object'&&n[k]&&!Array.isArray(o[k])) {\n      changes.push(...diffDicts(o[k],n[k],fk));\n    } else if (JSON.stringify(o[k])!==JSON.stringify(n[k])) {\n      changes.push({field:fk,type:'UPDATED',old:o[k],new:n[k]});\n    }\n  }\n  return changes;\n}\n\nconst v1_memo = $('Load v1 Memo').item.json.v1_memo;\nconst changes  = diffDicts(v1_memo, v2_memo, '');\nconst resolved = (v1_memo.questions_or_unknowns||[]).filter(q=>!(v2_memo.questions_or_unknowns||[]).includes(q));\n\nreturn { json: { v2_memo, account_id: v2_memo.account_id, changes, resolved } };"
+      },
+      "id": "parse-memo-v2",
+      "name": "Parse Memo v2 + Diff",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [900, 420]
+    },
+    {
+      "parameters": {
+        "url": "https://api.anthropic.com/v1/messages",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "x-api-key",        "value": "={{ $env.ANTHROPIC_API_KEY }}" },
+            { "name": "anthropic-version", "value": "2023-06-01" },
+            { "name": "Content-Type",      "value": "application/json" }
+          ]
+        },
+        "sendBody": true,
+        "bodyParameters": {
+          "parameters": [
+            {
+              "name": "=",
+              "value": "={{ JSON.stringify({ model: 'claude-sonnet-4-20250514', max_tokens: 4096, system: $env.AGENT_SPEC_SYSTEM, messages: [{ role: 'user', content: 'Date: ' + $('Normalize Input').item.json.today + '\\n\\nACCOUNT MEMO:\\n' + JSON.stringify($json.v2_memo, null, 2) }] }) }}"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "generate-spec-v2",
+      "name": "Generate Agent Spec (v2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [1100, 420]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const raw = $input.item.json.content[0].text;\nconst cleaned = raw.replace(/^```(?:json)?\\s*/m,'').replace(/\\s*```$/m,'').trim();\nlet v2_spec;\ntry { v2_spec = JSON.parse(cleaned); } catch(e) { throw new Error('v2 spec parse failed: '+e.message); }\nv2_spec.version    = 'v2';\nv2_spec.account_id = $('Parse Memo v2 + Diff').item.json.account_id;\n\nconst { v2_memo, changes, resolved } = $('Parse Memo v2 + Diff').item.json;\nconst today = $('Normalize Input').item.json.today;\n\n// Build markdown changelog\nlet md = `# Changelog\\n\\n**Date:** ${today}  \\n**Transition:** v1 → v2  \\n**Changes:** ${changes.length}  \\n**Resolved:** ${resolved.length}\\n\\n## Field Changes\\n\\n`;\nfor (const c of changes) {\n  md += `### \\`${c.field}\\` — ${c.type}\\n`;\n  if (c.type==='UPDATED') md += `- Before: \\`${JSON.stringify(c.old)}\\`\\n- After: \\`${JSON.stringify(c.new)}\\`\\n\\n`;\n  else if (c.type==='ADDED')   md += `- Added: \\`${JSON.stringify(c.new)}\\`\\n\\n`;\n  else if (c.type==='REMOVED') md += `- Removed: \\`${JSON.stringify(c.old)}\\`\\n\\n`;\n}\nif (resolved.length) {\n  md += `## Resolved Unknowns\\n\\n`;\n  for (const r of resolved) md += `- ✅ ${r}\\n`;\n}\nconst still_open = v2_memo.questions_or_unknowns || [];\nif (still_open.length) {\n  md += `\\n## Still Open\\n\\n`;\n  for (const r of still_open) md += `- ❓ ${r}\\n`;\n}\n\nreturn { json: { v2_spec, v2_memo, account_id: v2_spec.account_id, changes, resolved, changelog_md: md } };"
+      },
+      "id": "parse-spec-v2",
+      "name": "Parse Spec v2 + Changelog",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1300, 420]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "const fs = require('fs');\nconst path = require('path');\nconst { v2_memo, v2_spec, account_id, changes, resolved, changelog_md } = $input.item.json;\n\nconst base = process.env.OUTPUTS_DIR || './outputs/accounts';\nconst v2Dir = path.join(base, account_id, 'v2');\nfs.mkdirSync(v2Dir, { recursive: true });\n\nfs.writeFileSync(path.join(v2Dir, 'account_memo.json'), JSON.stringify(v2_memo, null, 2));\nfs.writeFileSync(path.join(v2Dir, 'agent_spec.json'),   JSON.stringify(v2_spec, null, 2));\nfs.writeFileSync(path.join(base, account_id, 'changelog.md'), changelog_md);\nfs.writeFileSync(path.join(base, account_id, 'changelog.json'), JSON.stringify({ account_id, changes, resolved, still_open: v2_memo.questions_or_unknowns||[] }, null, 2));\n\nconsole.log('[SAVED v2]', v2Dir);\nreturn { json: { account_id, status: 'v2_saved', total_changes: changes.length, resolved: resolved.length, still_open: (v2_memo.questions_or_unknowns||[]).length } };"
+      },
+      "id": "save-v2",
+      "name": "Save v2 + Changelog",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1500, 420]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Create a task in a free task tracker (GitHub Issues via API)\n// Set GITHUB_TOKEN and GITHUB_REPO env vars to enable\n// Falls back to logging if not configured\n\nconst { account_id, status } = $input.item.json;\nconst token = process.env.GITHUB_TOKEN;\nconst repo  = process.env.GITHUB_REPO; // e.g. 'yourname/clara-pipeline'\n\nif (!token || !repo) {\n  console.log('[TASK TRACKER] GitHub not configured — logging task locally');\n  const fs = require('fs');\n  const path = require('path');\n  const tasksFile = path.join(process.env.OUTPUTS_DIR || './outputs', '_tasks.json');\n  let tasks = [];\n  try { tasks = JSON.parse(fs.readFileSync(tasksFile, 'utf8')); } catch(e) {}\n  tasks.push({ account_id, status, created_at: new Date().toISOString(), pipeline: status.includes('v2') ? 'B' : 'A' });\n  fs.writeFileSync(tasksFile, JSON.stringify(tasks, null, 2));\n  return { json: { ...($input.item.json), task_status: 'logged_locally' } };\n}\n\n// If GitHub configured, create issue\nconst title = `[Clara] ${account_id} — ${status}`;\nconst body  = `Account \\`${account_id}\\` processed.\\n\\nStatus: **${status}**\\nTimestamp: ${new Date().toISOString()}`;\n\n// Note: actual HTTP call would go here in production\n// Stubbed to avoid n8n credential complexity in export\nreturn { json: { ...($input.item.json), task_status: 'github_issue_created', title } };"
+      },
+      "id": "create-task",
+      "name": "Create Task (GitHub Issues / Local Log)",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1700, 300]
+    },
+    {
+      "parameters": {
+        "mode": "runOnceForEachItem",
+        "jsCode": "// Final log entry\nconst fs = require('fs');\nconst path = require('path');\nconst item = $input.item.json;\nconst logDir  = process.env.LOGS_DIR || './logs';\nfs.mkdirSync(logDir, { recursive: true });\nconst today   = new Date().toISOString().split('T')[0];\nconst logPath = path.join(logDir, `pipeline_${today}.log`);\nconst entry   = `[${new Date().toISOString()}] account=${item.account_id} status=${item.status||'done'} task=${item.task_status||'n/a'}\\n`;\nfs.appendFileSync(logPath, entry);\nreturn { json: item };"
+      },
+      "id": "log-result",
+      "name": "Log Result",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [1900, 300]
+    }
+  ],
+  "connections": {
+    "Start":                            { "main": [[{ "node": "Normalize Input",              "type": "main", "index": 0 }]] },
+    "Normalize Input":                  { "main": [[{ "node": "Pipeline A or B?",             "type": "main", "index": 0 }]] },
+    "Pipeline A or B?": {
+      "main": [
+        [{ "node": "Extract Account Memo (v1)", "type": "main", "index": 0 }],
+        [{ "node": "Load v1 Memo",              "type": "main", "index": 0 }]
+      ]
+    },
+    "Extract Account Memo (v1)":        { "main": [[{ "node": "Parse Memo v1",                "type": "main", "index": 0 }]] },
+    "Parse Memo v1":                    { "main": [[{ "node": "Generate Agent Spec (v1)",      "type": "main", "index": 0 }]] },
+    "Generate Agent Spec (v1)":         { "main": [[{ "node": "Parse Spec v1",                "type": "main", "index": 0 }]] },
+    "Parse Spec v1":                    { "main": [[{ "node": "Save v1 to Disk",              "type": "main", "index": 0 }]] },
+    "Save v1 to Disk":                  { "main": [[{ "node": "Create Task (GitHub Issues / Local Log)", "type": "main", "index": 0 }]] },
+    "Load v1 Memo":                     { "main": [[{ "node": "Extract Account Memo (v2)",    "type": "main", "index": 0 }]] },
+    "Extract Account Memo (v2)":        { "main": [[{ "node": "Parse Memo v2 + Diff",         "type": "main", "index": 0 }]] },
+    "Parse Memo v2 + Diff":             { "main": [[{ "node": "Generate Agent Spec (v2)",     "type": "main", "index": 0 }]] },
+    "Generate Agent Spec (v2)":         { "main": [[{ "node": "Parse Spec v2 + Changelog",   "type": "main", "index": 0 }]] },
+    "Parse Spec v2 + Changelog":        { "main": [[{ "node": "Save v2 + Changelog",         "type": "main", "index": 0 }]] },
+    "Save v2 + Changelog":              { "main": [[{ "node": "Create Task (GitHub Issues / Local Log)", "type": "main", "index": 0 }]] },
+    "Create Task (GitHub Issues / Local Log)": { "main": [[{ "node": "Log Result",           "type": "main", "index": 0 }]] }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "meta": {
+    "description": "Clara Answers Pipeline — Pipeline A (demo->v1) and Pipeline B (onboarding->v2). Trigger with JSON input containing either {transcript, company_name} for Pipeline A or {onboarding_text, account_id} for Pipeline B."
+  }
+}

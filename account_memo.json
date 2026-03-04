@@ -1,0 +1,100 @@
+{
+  "account_id": "bens-electric-001",
+  "version": "v1",
+  "source": "demo_call",
+  "extracted_at": "2026-03-04",
+  "company_name": "Ben's Electric Solutions",
+  "primary_contact": {
+    "name": "Ben Penoyer",
+    "role": "Owner / Sole Proprietor",
+    "email": "ben@benselectricsolutionsteam.com",
+    "phone": "403-975-1773"
+  },
+  "secondary_contact": {
+    "name": "Greg (last name unknown)",
+    "role": "Incoming Operations Manager / Estimator",
+    "email": null,
+    "phone": null,
+    "note": "Will take over as main point of contact later in 2026"
+  },
+  "business_info": {
+    "industry": "Electrical Contracting",
+    "years_in_business": 8,
+    "entity_type": "Sole Proprietor (planning to incorporate in 2026)",
+    "location": "Calgary, Alberta, Canada",
+    "billing_address": null,
+    "crm": "Jobber",
+    "team_size": "3 journeymen + 1 apprentice (being hired) + 1-2 subcontractors + Ben + Greg (incoming)"
+  },
+  "services_supported": [
+    "Service calls",
+    "Outlet replacements and upgrades",
+    "Aluminum wiring mitigation",
+    "Panel changes",
+    "EV charger installation",
+    "Hot tub electrical hookups",
+    "Residential renovations",
+    "Commercial tenant improvements",
+    "Troubleshooting",
+    "New custom home electrical",
+    "LED lighting upgrades",
+    "Underground conduit runs"
+  ],
+  "services_not_supported": [
+    "Gemstone / decorative lights (discontinued)",
+    "Full plumbing or gas line work",
+    "Generator supply (unclear — mentioned but not confirmed as offered service)",
+    "Pizza delivery"
+  ],
+  "business_hours": {
+    "days": "Monday to Friday (assumed — not explicitly confirmed)",
+    "start": "8:00 AM",
+    "end": "unknown",
+    "timezone": "America/Edmonton (MST/MDT — Calgary, AB)",
+    "note": "8AM start confirmed by demo agent interaction. Closing time not stated."
+  },
+  "call_volume_estimate": "20–50 calls per week",
+  "emergency_definition": [
+    "Gas station pump failures (for specific property manager client)",
+    "After-hours electrical emergencies for regular property managers and general contractors",
+    "General electrical emergencies — Ben decides case by case"
+  ],
+  "emergency_routing_rules": {
+    "primary": "Transfer directly to Ben Penoyer (403-975-1773)",
+    "secondary": "Unknown — no backup on-call person confirmed",
+    "after_hours_emergency": "Ben is sole on-call person",
+    "note": "Ben occasionally defers non-regular emergency callers elsewhere. No formal escalation chain confirmed yet."
+  },
+  "non_emergency_routing_rules": {
+    "during_hours": "Collect caller info, qualify job type, schedule site visit or service call",
+    "after_hours": "Collect details, inform caller follow-up will happen next business day",
+    "preferred_booking_flow": "Clara collects preferred date/time, passes to Ben — Ben confirms in Jobber"
+  },
+  "call_transfer_rules": {
+    "timeout": "Not specified",
+    "retries": "Not specified",
+    "transfer_fail_message": "Not specified — to be confirmed at onboarding",
+    "vip_numbers": "Ben's wife and select key contractors to bypass Clara screening",
+    "screening_exceptions": "Ben to provide list of personal/VIP numbers"
+  },
+  "integration_constraints": [
+    "Jobber CRM integration is IN PROGRESS — not yet live",
+    "Do not auto-confirm appointments in Jobber — Ben confirms manually",
+    "Clara collects preferred job date/time and passes to Ben via email/text/dashboard",
+    "No ServiceTitan or HouseCall Pro — client uses Jobber only"
+  ],
+  "after_hours_flow_summary": "Greet caller. Ask purpose. If emergency (e.g. gas station pump down, urgent electrical), collect name, number, address and transfer to Ben immediately. If non-emergency, collect details and assure follow-up next business day.",
+  "office_hours_flow_summary": "Greet caller. Ask purpose. Qualify job type (does Ben do this work?). Collect name, number, address, preferred date/time. Inform caller team will follow up to confirm appointment. Route urgent calls or VIP numbers directly to Ben.",
+  "questions_or_unknowns": [
+    "Exact business hours end time not confirmed",
+    "Billing address not captured in transcript",
+    "Exact VIP/bypass number list not provided",
+    "Transfer timeout duration not specified",
+    "Fallback if Ben doesn't answer — no secondary contact confirmed",
+    "Greg's contact details unknown",
+    "Service area / radius not explicitly confirmed (assumed Calgary metro)",
+    "After-hours policy for non-regular customers not fully defined",
+    "Generator services — unclear if offered or not"
+  ],
+  "notes": "Ben is enthusiastic, signed up for 3-month starter plan at $249/month (500 min). Kickoff call scheduled day after contract signing. Jobber integration not yet live — Clara will operate without CRM sync initially. Ben wants Clara to filter spam/sales calls automatically. Key use case: after-hours coverage and emergency dispatch for property manager clients."
+}

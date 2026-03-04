@@ -1,0 +1,106 @@
+{
+  "account_id": "bens-electric-001",
+  "version": "v2",
+  "source": "onboarding_call",
+  "extracted_at": "2026-03-04",
+  "company_name": "Ben's Electric Solutions",
+  "primary_contact": {
+    "name": "Ben Penoyer",
+    "role": "Owner / Sole Proprietor",
+    "email": "ben@benselectricsolutionsteam.com",
+    "phone": "403-975-1773"
+  },
+  "secondary_contact": {
+    "name": "Greg (last name unknown)",
+    "role": "Incoming Operations Manager / Estimator",
+    "email": null,
+    "phone": null,
+    "note": "Will take over as main point of contact later in 2026"
+  },
+  "onboarding_reference_contact": {
+    "name": "Shelley Manley",
+    "company": "G&M Pressure Washing",
+    "phone": "403-870-8494",
+    "email": "gm_pressurewash@yahoo.ca",
+    "note": "Referenced during onboarding call — likely a client or test contact provided by Ben"
+  },
+  "business_info": {
+    "industry": "Electrical Contracting",
+    "years_in_business": 8,
+    "entity_type": "Sole Proprietor (planning to incorporate in 2026)",
+    "location": "Calgary, Alberta, Canada",
+    "billing_address": null,
+    "crm": "Jobber",
+    "team_size": "3 journeymen + 1 apprentice (being hired) + 1-2 subcontractors + Ben + Greg (incoming)"
+  },
+  "services_supported": [
+    "Service calls",
+    "Outlet replacements and upgrades",
+    "Aluminum wiring mitigation",
+    "Panel changes",
+    "EV charger installation",
+    "Hot tub electrical hookups",
+    "Residential renovations",
+    "Commercial tenant improvements",
+    "Troubleshooting",
+    "New custom home electrical",
+    "LED lighting upgrades",
+    "Underground conduit runs"
+  ],
+  "services_not_supported": [
+    "Gemstone / decorative lights (discontinued)",
+    "Full plumbing or gas installation",
+    "Generator supply (unclear — not confirmed as offered service)"
+  ],
+  "business_hours": {
+    "days": "Monday to Friday (assumed — not yet explicitly confirmed)",
+    "start": "8:00 AM",
+    "end": "TBD — not confirmed at onboarding",
+    "timezone": "America/Edmonton (MST/MDT — Calgary, AB)",
+    "note": "8AM start confirmed in demo. Closing time still unknown."
+  },
+  "call_volume_estimate": "20–50 calls per week",
+  "emergency_definition": [
+    "Gas station pump failures (for specific property manager client)",
+    "After-hours electrical emergencies for regular property managers and general contractors",
+    "General electrical emergencies — Ben decides case by case"
+  ],
+  "emergency_routing_rules": {
+    "primary": "Transfer directly to Ben Penoyer (403-975-1773)",
+    "secondary": "Unknown — no backup confirmed",
+    "after_hours_emergency": "Ben is sole on-call person",
+    "note": "Ben occasionally defers non-regular emergency callers elsewhere. No formal escalation chain confirmed."
+  },
+  "non_emergency_routing_rules": {
+    "during_hours": "Collect caller info, qualify job type, schedule site visit or service call",
+    "after_hours": "Collect details, inform caller follow-up will happen next business day",
+    "preferred_booking_flow": "Clara collects preferred date/time, passes to Ben — Ben confirms in Jobber"
+  },
+  "call_transfer_rules": {
+    "timeout": "TBD — not confirmed",
+    "retries": "TBD — not confirmed",
+    "transfer_fail_message": "TBD — to be confirmed",
+    "vip_numbers": "Ben to provide list — personal contacts and select key contractors bypass Clara",
+    "screening_exceptions": "Ben's wife and key regular contractors to be added to bypass list"
+  },
+  "integration_constraints": [
+    "Jobber CRM integration is IN PROGRESS — not yet live",
+    "Do not auto-confirm appointments in Jobber — Ben confirms manually",
+    "Clara collects preferred job date/time and passes to Ben via email/text/dashboard",
+    "No ServiceTitan or HouseCall Pro — client uses Jobber only"
+  ],
+  "after_hours_flow_summary": "Greet caller. Ask purpose. If emergency (e.g. gas station pump down, urgent electrical), collect name, number, address and transfer to Ben immediately at 403-975-1773. If non-emergency, collect details and assure follow-up next business day.",
+  "office_hours_flow_summary": "Greet caller. Ask purpose. Qualify job type. Collect name, number, address, preferred date/time. Inform caller team will follow up to confirm appointment. Route urgent/VIP calls directly to Ben.",
+  "questions_or_unknowns": [
+    "Exact business hours end time not confirmed",
+    "Billing address not captured",
+    "VIP/bypass number list not yet provided by Ben",
+    "Transfer timeout duration not specified",
+    "Fallback if Ben doesn't answer — no secondary contact confirmed",
+    "Greg's contact details unknown",
+    "Service area radius not explicitly confirmed (assumed Calgary metro)",
+    "Generator services — unclear if offered",
+    "Shelley Manley / G&M Pressure Washing relationship to Ben's Electric not fully confirmed (client? test contact?)"
+  ],
+  "notes": "Onboarding call confirmed key contact Shelley Manley at G&M Pressure Washing (403-870-8494). Business email confirmed as info@benselectricsolutionsteam.com. Ben on 3-month starter plan at $249/month (500 min). Jobber integration still pending. Most routing and hours details still need a follow-up onboarding session."
+}

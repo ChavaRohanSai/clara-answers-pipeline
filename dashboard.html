@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>Clara Answers — Pipeline Dashboard</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; background: #0f1117; color: #e2e8f0; min-height: 100vh; }
+
+  header { background: #1a1d27; border-bottom: 1px solid #2d3148; padding: 18px 32px; display: flex; align-items: center; gap: 16px; }
+  header .logo { font-size: 22px; font-weight: 700; color: #7c6fff; letter-spacing: -0.5px; }
+  header .sub  { font-size: 13px; color: #6b7280; }
+
+  .layout { display: grid; grid-template-columns: 280px 1fr; min-height: calc(100vh - 61px); }
+
+  /* Sidebar */
+  .sidebar { background: #13151f; border-right: 1px solid #2d3148; padding: 20px 0; overflow-y: auto; }
+  .sidebar h3 { font-size: 11px; text-transform: uppercase; letter-spacing: 1px; color: #4b5563; padding: 0 20px 10px; }
+  .account-item { padding: 10px 20px; cursor: pointer; border-left: 3px solid transparent; transition: all 0.15s; }
+  .account-item:hover { background: #1e2130; }
+  .account-item.active { background: #1e2130; border-left-color: #7c6fff; }
+  .account-item .name { font-size: 13px; font-weight: 500; }
+  .account-item .id   { font-size: 11px; color: #6b7280; margin-top: 2px; }
+  .badge { display: inline-block; font-size: 10px; padding: 2px 6px; border-radius: 10px; margin-left: 6px; font-weight: 600; }
+  .badge.v2  { background: #14532d; color: #4ade80; }
+  .badge.v1  { background: #1e3a5f; color: #60a5fa; }
+  .badge.err { background: #450a0a; color: #f87171; }
+
+  /* Main */
+  .main { padding: 28px 32px; overflow-y: auto; }
+  .empty-state { display: flex; flex-direction: column; align-items: center; justify-content: center; height: 60vh; color: #4b5563; gap: 12px; }
+  .empty-state .icon { font-size: 48px; }
+
+  /* Tabs */
+  .tabs { display: flex; gap: 4px; margin-bottom: 24px; border-bottom: 1px solid #2d3148; }
+  .tab  { padding: 8px 18px; font-size: 13px; cursor: pointer; border-bottom: 2px solid transparent; color: #6b7280; transition: all 0.15s; }
+  .tab:hover  { color: #e2e8f0; }
+  .tab.active { color: #7c6fff; border-bottom-color: #7c6fff; }
+
+  /* Cards */
+  .card { background: #1a1d27; border: 1px solid #2d3148; border-radius: 10px; padding: 20px; margin-bottom: 16px; }
+  .card h4 { font-size: 13px; text-transform: uppercase; letter-spacing: 0.5px; color: #7c6fff; margin-bottom: 14px; }
+  .kv-grid { display: grid; grid-template-columns: 180px 1fr; gap: 6px 12px; font-size: 13px; }
+  .kv-grid .k { color: #6b7280; }
+  .kv-grid .v { color: #e2e8f0; word-break: break-word; }
+  .kv-grid .v.missing { color: #ef4444; font-style: italic; }
+
+  /* Diff view */
+  .diff-table { width: 100%; border-collapse: collapse; font-size: 12px; }
+  .diff-table th { text-align: left; padding: 8px 12px; background: #13151f; color: #6b7280; font-weight: 500; border-bottom: 1px solid #2d3148; }
+  .diff-table td { padding: 8px 12px; border-bottom: 1px solid #1e2130; vertical-align: top; }
+  .diff-table tr:last-child td { border-bottom: none; }
+  .tag { display: inline-block; font-size: 10px; padding: 2px 7px; border-radius: 4px; font-weight: 600; }
+  .tag.ADDED   { background: #14532d; color: #4ade80; }
+  .tag.REMOVED { background: #450a0a; color: #f87171; }
+  .tag.UPDATED { background: #1e3a5f; color: #60a5fa; }
+  .old { color: #f87171; }
+  .new { color: #4ade80; }
+
+  /* Prompt box */
+  .prompt-box { background: #13151f; border: 1px solid #2d3148; border-radius: 8px; padding: 16px; font-size: 12px; line-height: 1.7; white-space: pre-wrap; color: #cbd5e1; font-family: "SF Mono", Monaco, monospace; max-height: 500px; overflow-y: auto; }
+
+  /* Unknown list */
+  .unknown-item { display: flex; align-items: flex-start; gap: 8px; padding: 8px 0; border-bottom: 1px solid #1e2130; font-size: 13px; }
+  .unknown-item:last-child { border-bottom: none; }
+  .unknown-item .bullet { color: #f59e0b; font-size: 16px; line-height: 1; }
+
+  /* Services */
+  .tag-list { display: flex; flex-wrap: wrap; gap: 6px; }
+  .service-tag { background: #1e2130; border: 1px solid #2d3148; border-radius: 6px; padding: 4px 10px; font-size: 12px; color: #cbd5e1; }
+  .service-tag.no { background: #450a0a22; border-color: #450a0a; color: #f87171; }
+
+  /* Load bar */
+  .load-notice { text-align: center; padding: 40px; color: #4b5563; font-size: 14px; }
+
+  .section-title { font-size: 20px; font-weight: 600; margin-bottom: 4px; }
+  .section-sub   { font-size: 13px; color: #6b7280; margin-bottom: 20px; }
+
+  .version-pill { display: inline-flex; align-items: center; gap: 6px; background: #1e2130; border: 1px solid #2d3148; border-radius: 20px; padding: 4px 12px; font-size: 12px; margin-bottom: 20px; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; }
+  .dot.v1 { background: #60a5fa; }
+  .dot.v2 { background: #4ade80; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="logo">Clara Answers</div>
+  <div class="sub">Pipeline Dashboard — Account Config Viewer</div>
+</header>
+
+<div class="layout">
+  <div class="sidebar">
+    <h3>Accounts</h3>
+    <div id="account-list"><div class="load-notice">Drop outputs/ folder<br>next to this file</div></div>
+  </div>
+  <div class="main" id="main-content">
+    <div class="empty-state">
+      <div class="icon">📋</div>
+      <div style="font-size:16px;color:#9ca3af">Select an account to view</div>
+      <div style="font-size:13px;color:#4b5563">Load your outputs/ folder using the button below</div>
+      <button onclick="loadFolder()" style="margin-top:12px;padding:10px 20px;background:#7c6fff;color:white;border:none;border-radius:8px;cursor:pointer;font-size:14px">
+        📂 Load outputs/ folder
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+let accounts = {};
+let activeId  = null;
+
+async function loadFolder() {
+  try {
+    const dir = await window.showDirectoryPicker();
+    accounts  = {};
+    await scanDir(dir, "");
+    renderSidebar();
+  } catch(e) {
+    if (e.name !== "AbortError") alert("Could not load folder: " + e.message);
+  }
+}
+
+async function scanDir(dir, prefix) {
+  for await (const [name, handle] of dir.entries()) {
+    if (handle.kind === "directory") {
+      if (name === "accounts") {
+        await scanAccounts(handle);
+      } else {
+        await scanDir(handle, prefix + name + "/");
+      }
+    }
+  }
+}
+
+async function scanAccounts(accountsDir) {
+  for await (const [accName, accHandle] of accountsDir.entries()) {
+    if (accHandle.kind !== "directory") continue;
+    const acc = { id: accName, v1: null, v2: null, changelog: null };
+
+    for await (const [vName, vHandle] of accHandle.entries()) {
+      if (vHandle.kind === "directory" && (vName === "v1" || vName === "v2")) {
+        const vData = {};
+        for await (const [fname, fhandle] of vHandle.entries()) {
+          if (fname.endsWith(".json")) {
+            const file = await fhandle.getFile();
+            const text = await file.text();
+            try { vData[fname.replace(".json","")] = JSON.parse(text); } catch(e){}
+          }
+        }
+        acc[vName] = vData;
+      } else if (vHandle.kind === "file" && vName === "changelog.json") {
+        const file = await vHandle.getFile();
+        const text = await file.text();
+        try { acc.changelog = JSON.parse(text); } catch(e) {}
+      }
+    }
+    accounts[accName] = acc;
+  }
+}
+
+function renderSidebar() {
+  const list = document.getElementById("account-list");
+  const keys = Object.keys(accounts);
+  if (!keys.length) { list.innerHTML = '<div class="load-notice">No accounts found</div>'; return; }
+
+  list.innerHTML = keys.map(id => {
+    const acc = accounts[id];
+    const ver = acc.v2 ? "v2" : acc.v1 ? "v1" : "err";
+    const name = acc.v1?.account_memo?.company_name || acc.v2?.account_memo?.company_name || id;
+    return `<div class="account-item ${id===activeId?'active':''}" onclick="selectAccount('${id}')">
+      <div class="name">${name} <span class="badge ${ver}">${ver.toUpperCase()}</span></div>
+      <div class="id">${id}</div>
+    </div>`;
+  }).join("");
+}
+
+function selectAccount(id) {
+  activeId = id;
+  renderSidebar();
+  const acc = accounts[id];
+  const memo = acc.v2?.account_memo || acc.v1?.account_memo;
+  const spec = acc.v2?.agent_spec   || acc.v1?.agent_spec;
+  const hasV2 = !!acc.v2;
+
+  document.getElementById("main-content").innerHTML = `
+    <div class="section-title">${memo?.company_name || id}</div>
+    <div class="section-sub">${memo?.account_id || id}</div>
+    <div class="version-pill">
+      <span class="dot v1"></span> v1 (demo)
+      ${hasV2 ? `&nbsp;&nbsp;<span class="dot v2"></span> v2 (onboarding)` : ""}
+    </div>
+    <div class="tabs">
+      <div class="tab active" onclick="showTab(this,'overview')">Overview</div>
+      <div class="tab" onclick="showTab(this,'prompt')">Agent Prompt</div>
+      ${hasV2 ? `<div class="tab" onclick="showTab(this,'diff')">Changelog</div>` : ""}
+      <div class="tab" onclick="showTab(this,'unknowns')">Unknowns (${memo?.questions_or_unknowns?.length||0})</div>
+    </div>
+    <div id="tab-overview">${renderOverview(acc)}</div>
+    <div id="tab-prompt"   style="display:none">${renderPrompt(spec)}</div>
+    ${hasV2 ? `<div id="tab-diff" style="display:none">${renderDiff(acc.changelog)}</div>` : ""}
+    <div id="tab-unknowns" style="display:none">${renderUnknowns(memo)}</div>
+  `;
+}
+
+function showTab(el, name) {
+  document.querySelectorAll(".tab").forEach(t => t.classList.remove("active"));
+  el.classList.add("active");
+  ["overview","prompt","diff","unknowns"].forEach(t => {
+    const el2 = document.getElementById("tab-"+t);
+    if (el2) el2.style.display = t===name ? "" : "none";
+  });
+}
+
+function val(v) {
+  if (v === null || v === undefined || v === "") return `<span class="missing">not confirmed</span>`;
+  if (Array.isArray(v)) return v.length ? v.join(", ") : `<span class="missing">none listed</span>`;
+  return v;
+}
+
+function renderOverview(acc) {
+  const memo = acc.v2?.account_memo || acc.v1?.account_memo;
+  const spec = acc.v2?.agent_spec   || acc.v1?.agent_spec;
+  if (!memo) return "<p>No memo found</p>";
+  const bh = memo.business_hours || {};
+  const er = memo.emergency_routing_rules || {};
+  const ct = memo.call_transfer_rules || {};
+  const svcs = memo.services_supported || [];
+  const nosvc = memo.services_not_supported || [];
+
+  return `
+  <div class="card">
+    <h4>Business Info</h4>
+    <div class="kv-grid">
+      <span class="k">Company</span>      <span class="v">${val(memo.company_name)}</span>
+      <span class="k">Industry</span>     <span class="v">${val(memo.business_info?.industry)}</span>
+      <span class="k">Location</span>     <span class="v">${val(memo.business_info?.location)}</span>
+      <span class="k">CRM</span>          <span class="v">${val(memo.business_info?.crm)}</span>
+      <span class="k">Team Size</span>    <span class="v">${val(memo.business_info?.team_size)}</span>
+    </div>
+  </div>
+  <div class="card">
+    <h4>Business Hours</h4>
+    <div class="kv-grid">
+      <span class="k">Days</span>         <span class="v">${val(bh.days)}</span>
+      <span class="k">Hours</span>        <span class="v">${bh.start||'?'} – ${bh.end||'?'}</span>
+      <span class="k">Timezone</span>     <span class="v">${val(bh.timezone)}</span>
+      <span class="k">Confirmed</span>    <span class="v">${bh.confirmed ? '✅ Yes' : '⚠️ Not yet confirmed'}</span>
+    </div>
+  </div>
+  <div class="card">
+    <h4>Emergency Routing</h4>
+    <div class="kv-grid">
+      <span class="k">Primary</span>      <span class="v">${val(er.primary_contact)}</span>
+      <span class="k">Secondary</span>    <span class="v">${val(er.secondary_contact)}</span>
+      <span class="k">Fallback</span>     <span class="v">${val(er.fallback)}</span>
+      <span class="k">Transfer #</span>   <span class="v">${val(spec?.call_transfer_protocol?.emergency_number)}</span>
+      <span class="k">Timeout</span>      <span class="v">${val(ct.timeout_seconds) === '<span class="missing">not confirmed</span>' ? val(null) : (ct.timeout_seconds + 's')}</span>
+    </div>
+  </div>
+  <div class="card">
+    <h4>Services Supported</h4>
+    <div class="tag-list">${svcs.map(s=>`<span class="service-tag">${s}</span>`).join("")||'<span class="missing">none listed</span>'}</div>
+    ${nosvc.length ? `<div style="margin-top:12px"><div style="font-size:11px;color:#6b7280;margin-bottom:6px">NOT SUPPORTED</div><div class="tag-list">${nosvc.map(s=>`<span class="service-tag no">${s}</span>`).join("")}</div></div>` : ""}
+  </div>
+  <div class="card">
+    <h4>Primary Contact</h4>
+    <div class="kv-grid">
+      <span class="k">Name</span>         <span class="v">${val(memo.primary_contact?.name)}</span>
+      <span class="k">Role</span>         <span class="v">${val(memo.primary_contact?.role)}</span>
+      <span class="k">Email</span>        <span class="v">${val(memo.primary_contact?.email)}</span>
+      <span class="k">Phone</span>        <span class="v">${val(memo.primary_contact?.phone)}</span>
+    </div>
+  </div>`;
+}
+
+function renderPrompt(spec) {
+  const prompt = spec?.system_prompt;
+  if (!prompt) return `<div class="card"><p style="color:#6b7280">No agent spec found.</p></div>`;
+  return `
+  <div class="card">
+    <h4>Agent: ${spec.agent_name || "—"} &nbsp; <span style="font-size:11px;color:#6b7280;text-transform:none">version ${spec.version}</span></h4>
+    <div class="kv-grid" style="margin-bottom:16px">
+      <span class="k">Tone</span>         <span class="v">${val(spec.voice_style?.tone)}</span>
+      <span class="k">Language</span>     <span class="v">${val(spec.voice_style?.language)}</span>
+      <span class="k">Transfer #</span>   <span class="v">${val(spec.call_transfer_protocol?.emergency_number)}</span>
+    </div>
+    <h4 style="margin-bottom:10px">System Prompt</h4>
+    <div class="prompt-box">${prompt.replace(/</g,"&lt;").replace(/>/g,"&gt;")}</div>
+  </div>`;
+}
+
+function renderDiff(changelog) {
+  if (!changelog) return `<div class="card"><p style="color:#6b7280">No changelog found.</p></div>`;
+  const changes = changelog.changes || [];
+  const resolved = changelog.resolved_unknowns || [];
+  const open = changelog.still_open_unknowns || [];
+
+  return `
+  <div class="card">
+    <h4>Summary</h4>
+    <div class="kv-grid">
+      <span class="k">Updated</span>         <span class="v">${changelog.updated_at}</span>
+      <span class="k">Total changes</span>    <span class="v">${changelog.total_changes}</span>
+      <span class="k">Resolved unknowns</span><span class="v">${resolved.length}</span>
+      <span class="k">Still open</span>       <span class="v">${open.length}</span>
+    </div>
+  </div>
+  <div class="card">
+    <h4>Field Changes</h4>
+    ${changes.length === 0 ? '<p style="color:#6b7280;font-size:13px">No field changes.</p>' : `
+    <table class="diff-table">
+      <thead><tr><th>Field</th><th>Type</th><th>Before</th><th>After</th></tr></thead>
+      <tbody>
+        ${changes.map(c => `
+          <tr>
+            <td style="font-family:monospace;color:#a78bfa">${c.field}</td>
+            <td><span class="tag ${c.type}">${c.type}</span></td>
+            <td class="old">${c.old !== null && c.old !== undefined ? JSON.stringify(c.old).slice(0,80) : "—"}</td>
+            <td class="new">${c.new !== null && c.new !== undefined ? JSON.stringify(c.new).slice(0,80) : "—"}</td>
+          </tr>`).join("")}
+      </tbody>
+    </table>`}
+  </div>
+  ${resolved.length ? `<div class="card"><h4>✅ Resolved Unknowns</h4>${resolved.map(r=>`<div class="unknown-item"><span class="bullet" style="color:#4ade80">✓</span><span>${r}</span></div>`).join("")}</div>` : ""}
+  ${open.length ? `<div class="card"><h4>❓ Still Open</h4>${open.map(r=>`<div class="unknown-item"><span class="bullet">?</span><span>${r}</span></div>`).join("")}</div>` : ""}`;
+}
+
+function renderUnknowns(memo) {
+  const unknowns = memo?.questions_or_unknowns || [];
+  return `<div class="card">
+    <h4>Open Questions & Missing Data (${unknowns.length})</h4>
+    ${unknowns.length === 0
+      ? '<p style="color:#4ade80;font-size:13px">✅ No open unknowns</p>'
+      : unknowns.map(u => `<div class="unknown-item"><span class="bullet">⚠</span><span>${u}</span></div>`).join("")}
+  </div>`;
+}
+</script>
+</body>
+</html>
